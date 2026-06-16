@@ -7,6 +7,21 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Mi Dulce Mia — POS</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  firebase.initializeApp({
+    apiKey: "AIzaSyDZSWQdBUKuoOBj_AlrIkBzczDRXfo1-Do",
+    authDomain: "dulce-mia-b63f4.firebaseapp.com",
+    projectId: "dulce-mia-b63f4",
+    storageBucket: "dulce-mia-b63f4.firebasestorage.app",
+    messagingSenderId: "434843273647",
+    appId: "1:434843273647:web:5620edaa3a2c590becc75a"
+  });
+  window._db = firebase.firestore();
+  window.firebaseReady = true;
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Nunito:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
@@ -1295,22 +1310,7 @@ input, select{font-family:inherit;}
 </div>
 
 
-<!-- Firebase SDK (compat version - más confiable en HTML estático) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyDZSWQdBUKuoOBj_AlrIkBzczDRXfo1-Do",
-    authDomain: "dulce-mia-b63f4.firebaseapp.com",
-    projectId: "dulce-mia-b63f4",
-    storageBucket: "dulce-mia-b63f4.firebasestorage.app",
-    messagingSenderId: "434843273647",
-    appId: "1:434843273647:web:5620edaa3a2c590becc75a"
-  };
-  firebase.initializeApp(firebaseConfig);
-  window._db = firebase.firestore();
-  window.firebaseReady = true;
-</script>
+
 
 <script>
 // ============================================================
