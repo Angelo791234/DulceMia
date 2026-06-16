@@ -1295,6 +1295,34 @@ input, select{font-family:inherit;}
 </div>
 
 
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDZSWQdBUKuoOBj_AlrIkBzczDRXfo1-Do",
+    authDomain: "dulce-mia-b63f4.firebaseapp.com",
+    projectId: "dulce-mia-b63f4",
+    storageBucket: "dulce-mia-b63f4.firebasestorage.app",
+    messagingSenderId: "434843273647",
+    appId: "1:434843273647:web:5620edaa3a2c590becc75a",
+    measurementId: "G-T197SCML5W"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  window._firebaseDB = db;
+  window._fbSetDoc = setDoc;
+  window._fbGetDoc = getDoc;
+  window._fbDoc = doc;
+  window._fbOnSnapshot = onSnapshot;
+
+  window.firebaseReady = true;
+  if (window._firebaseReadyCallback) window._firebaseReadyCallback();
+</script>
+
 <script>
 // ============================================================
 //  MI DULCE MIA — DATA LAYER
@@ -1425,6 +1453,64 @@ function initData() {
 
 function saveData(d) {
   localStorage.setItem(STORE_KEY, JSON.stringify(d));
+  // Guardar en Firebase (sin foto para evitar límite de tamaño)
+  if (window.firebaseReady && window._firebaseDB) {
+    const dataToSave = JSON.parse(JSON.stringify(d));
+    dataToSave.productos = dataToSave.productos.map(p => ({ ...p, foto: p.foto ? '__tiene_foto__' : null }));
+    window._fbSetDoc(window._fbDoc(window._firebaseDB, "pos", "data"), dataToSave)
+      .catch(e => console.warn("Firebase save error:", e));
+  }
+}
+
+async function syncFromFirebase() {
+  if (!window.firebaseReady || !window._firebaseDB) return;
+  try {
+    const snap = await window._fbGetDoc(window._fbDoc(window._firebaseDB, "pos", "data"));
+    if (!snap.exists()) {
+      // Primera vez: subir datos locales a Firebase
+      const local = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (local) saveData(local);
+      return;
+    }
+    const remote = snap.data();
+    const local = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    // Restaurar fotos locales (las fotos no se guardan en Firebase)
+    if (local && local.productos && remote.productos) {
+      remote.productos = remote.productos.map(rp => {
+        const lp = local.productos.find(x => x.id === rp.id);
+        if (rp.foto === '__tiene_foto__' && lp && lp.foto) rp.foto = lp.foto;
+        else if (rp.foto === '__tiene_foto__') rp.foto = null;
+        return rp;
+      });
+    }
+    localStorage.setItem(STORE_KEY, JSON.stringify(remote));
+    console.log("✅ Datos sincronizados desde Firebase");
+    // Refrescar vista si ya hay sesión activa
+    if (window.sesion) switchView(window.tabActual);
+  } catch(e) {
+    console.warn("Firebase sync error:", e);
+  }
+}
+
+// Escuchar cambios en tiempo real (otros dispositivos)
+function startFirebaseListener() {
+  if (!window.firebaseReady || !window._firebaseDB) return;
+  window._fbOnSnapshot(window._fbDoc(window._firebaseDB, "pos", "data"), (snap) => {
+    if (!snap.exists()) return;
+    const remote = snap.data();
+    const local = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    // Restaurar fotos locales
+    if (local && local.productos && remote.productos) {
+      remote.productos = remote.productos.map(rp => {
+        const lp = local.productos.find(x => x.id === rp.id);
+        if (rp.foto === '__tiene_foto__' && lp && lp.foto) rp.foto = lp.foto;
+        else if (rp.foto === '__tiene_foto__') rp.foto = null;
+        return rp;
+      });
+    }
+    localStorage.setItem(STORE_KEY, JSON.stringify(remote));
+    if (window.sesion) switchView(window.tabActual);
+  });
 }
 
 // Logo (Mi Dulce Mia) — embedded data URI
@@ -2535,6 +2621,16 @@ document.addEventListener('keydown', function(e) {
 // Initialize data on load
 initData();
 actualizarReloj();
+
+// Firebase: sincronizar al cargar y escuchar cambios en tiempo real
+function _initFirebase() {
+  syncFromFirebase().then(() => startFirebaseListener());
+}
+if (window.firebaseReady) {
+  _initFirebase();
+} else {
+  window._firebaseReadyCallback = _initFirebase;
+}
 
 </script>
 </body>
