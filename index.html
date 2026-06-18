@@ -571,6 +571,7 @@ input, select{font-family:inherit;}
   content:'';position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
   width:50%;height:2.5px;background:var(--accent);border-radius:2px;
 }
+.hidden{display:none !important;}
 .nav-item.hidden{display:none;}
 
 @media(min-width:880px){
@@ -2220,8 +2221,14 @@ async function generarTicket(venta) {
   const PAD = 20;
   const LOGO_SIZE = 90;
   const tieneCliente = venta.cliente && venta.cliente.trim().length > 0;
-  // Altura dinámica: logo (100) + cabecera texto (35) + datos venta (70[+15 si hay cliente]) + items + total (50) + pie (55) + padding extra (20)
-  let height = 330 + venta.items.length * 24 + (tieneCliente ? 15 : 0);
+
+  // Altura dinámica calculada sumando cada bloque real del recibo:
+  const ALTURA_HEADER = 20 + LOGO_SIZE + 14 + 13 + 18 + 20; // logo + textos + línea
+  const ALTURA_DATOS_VENTA = 17 + 15 + (tieneCliente ? 15 : 0) + 15 + 18 + 20; // N°, fecha, cliente?, vendedor, pago, línea
+  const ALTURA_ITEMS = venta.items.length * 24;
+  const ALTURA_TOTAL = 24 + 36; // línea + total
+  const ALTURA_PIE = 18 + 16 + 14 + 16 + 24; // puntos + gracias + nombre + disfrutalo + margen final
+  let height = ALTURA_HEADER + ALTURA_DATOS_VENTA + ALTURA_ITEMS + ALTURA_TOTAL + ALTURA_PIE;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = height;
@@ -2742,8 +2749,16 @@ let editandoUserId = null;
 function renderUsuarios() {
   const d = initData();
   const roleIco = { dueno:'👑', admin:'⚙️', vendedor:'🎀' };
+
+  // El Dueño solo puede ver perfiles de Vendedores y su propio perfil.
+  // El Administrador tiene visibilidad total.
+  let usuariosVisibles = d.usuarios;
+  if (sesion && sesion.rol === 'dueno') {
+    usuariosVisibles = d.usuarios.filter(u => u.rol === 'vendedor' || u.id === sesion.id);
+  }
+
   const list = document.getElementById('userList');
-  list.innerHTML = d.usuarios.map(u => `
+  list.innerHTML = usuariosVisibles.map(u => `
     <div class="list-row" onclick="abrirModalUsuario('${u.id}')">
       <div class="list-row-img">${u.foto ? `<img src="${u.foto}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : (roleIco[u.rol]||'👤')}</div>
       <div class="list-row-info">
@@ -2755,8 +2770,16 @@ function renderUsuarios() {
 
 function abrirModalUsuario(id) {
   const d = initData();
-  editandoUserId = id;
   const u = id ? d.usuarios.find(x => x.id === id) : null;
+
+  // Seguridad: el Dueño no puede abrir perfiles que no le correspondan ver
+  // (solo Vendedores y su propio perfil). El Admin puede abrir cualquiera.
+  if (u && sesion && sesion.rol === 'dueno' && u.rol !== 'vendedor' && u.id !== sesion.id) {
+    toast('⚠️ No tienes permiso para ver este perfil');
+    return;
+  }
+
+  editandoUserId = id;
 
   document.getElementById('userModalTitle').textContent = u ? 'Editar Usuario' : 'Nuevo Usuario';
   document.getElementById('userNombre').value = u ? u.nombre : '';
@@ -2772,15 +2795,16 @@ function abrirModalUsuario(id) {
   }
 
   // Roles disponibles según quién está creando/editando:
-  // - Dueño solo puede asignar "Vendedor"
+  // - Dueño solo puede asignar/ver "Vendedor" (y su propio rol "Dueño" si edita su perfil)
   // - Admin puede asignar "Vendedor" y "Dueño" (no Admin)
-  // - Si se está editando un usuario cuyo rol actual no está en la lista permitida, se incluye para no perderlo
   const rolesPermitidos = {
     dueno: [{v:'vendedor', t:'Vendedor'}],
     admin: [{v:'vendedor', t:'Vendedor'}, {v:'dueno', t:'Dueño'}]
   };
   const rolSesion = sesion ? sesion.rol : 'admin';
   let opciones = rolesPermitidos[rolSesion] || rolesPermitidos['admin'];
+  // Si se edita un usuario cuyo rol actual no está en la lista de asignables, se incluye
+  // para no perderlo (ej: Admin editando a otro Admin, o Dueño editando su propio perfil).
   if (u && !opciones.some(o => o.v === u.rol)) {
     const etiquetas = { dueno:'Dueño', admin:'Administrador', vendedor:'Vendedor' };
     opciones = [...opciones, { v: u.rol, t: etiquetas[u.rol] || u.rol }];
