@@ -952,7 +952,7 @@ input, select{font-family:inherit;}
 <div class="section-card" style="margin-bottom:14px;">
   <div class="hdr-search" style="max-width:none;">
     <span class="ico-search">🔍</span>
-    <input type="text" id="histSearch" placeholder="Buscar por N° de venta, vendedor o producto..." oninput="renderHistorial()" style="padding-right:14px;">
+    <input type="text" id="histSearch" placeholder="Buscar por N° de venta, vendedor, cliente o producto..." oninput="renderHistorial()" style="padding-right:14px;">
   </div>
 </div>
 
@@ -1016,6 +1016,7 @@ input, select{font-family:inherit;}
       <div class="view-section role-admin" id="view-categorias">
         <div class="page-head">
   <div>
+    <button class="btn-secondary" style="margin-bottom:10px;" onclick="switchView('perfil')">← Volver a Perfil</button>
     <div class="page-title">Categorías</div>
     <div class="page-sub">Organiza los productos de tu tienda</div>
   </div>
@@ -1036,6 +1037,7 @@ input, select{font-family:inherit;}
       <div class="view-section role-admin" id="view-usuarios">
         <div class="page-head">
   <div>
+    <button class="btn-secondary" style="margin-bottom:10px;" onclick="switchView('perfil')">← Volver a Perfil</button>
     <div class="page-title">Usuarios</div>
     <div class="page-sub">Administra accesos al sistema</div>
   </div>
@@ -1079,6 +1081,26 @@ input, select{font-family:inherit;}
 
 <button class="btn-danger" style="width:100%;padding:13px;" onclick="doLogout()">🚪 Cerrar Sesión</button>
 
+<div class="section-card role-admin" style="margin-top:14px;">
+  <div class="section-head"><div class="section-title">⚙️ Administración</div></div>
+  <div class="list-table">
+    <div class="list-row" onclick="switchView('categorias')">
+      <div class="list-row-img">🏷️</div>
+      <div class="list-row-info">
+        <div class="list-row-name">Categorías</div>
+        <div class="list-row-meta">Organiza el catálogo de productos</div>
+      </div>
+    </div>
+    <div class="list-row" onclick="switchView('usuarios')">
+      <div class="list-row-img">👥</div>
+      <div class="list-row-info">
+        <div class="list-row-name">Usuarios</div>
+        <div class="list-row-meta">Crea cuentas de vendedor y contraseñas</div>
+      </div>
+    </div>
+  </div>
+</div>
+
       </div>
 
     </div>
@@ -1097,6 +1119,10 @@ input, select{font-family:inherit;}
   <div class="cart-summary-row"><span>Subtotal</span><span class="js-cart-subtotal">S/ 0.00</span></div>
   <div class="cart-summary-row"><span>Descuento</span><span class="js-cart-descuento">− S/ 0.00</span></div>
   <div class="cart-summary-row total"><span>Total</span><span class="val js-cart-total">S/ 0.00</span></div>
+</div>
+<div class="field-group" style="margin-bottom:10px;">
+  <label class="field-label">Nombre del cliente (opcional)</label>
+  <input class="field-input js-cliente-nombre" type="text" placeholder="Ej: María Pérez" oninput="syncClienteNombre(this.value)">
 </div>
 <button class="checkout-btn js-checkout-btn" onclick="procesarVenta()" disabled>💳 💳 Cobrar / Generar Ticket</button>
 <div class="pay-label">Método de pago</div>
@@ -1169,6 +1195,10 @@ input, select{font-family:inherit;}
   <div class="cart-summary-row"><span>Descuento</span><span class="js-cart-descuento">− S/ 0.00</span></div>
   <div class="cart-summary-row total"><span>Total</span><span class="val js-cart-total">S/ 0.00</span></div>
 </div>
+<div class="field-group" style="margin-bottom:10px;">
+  <label class="field-label">Nombre del cliente (opcional)</label>
+  <input class="field-input js-cliente-nombre" type="text" placeholder="Ej: María Pérez" oninput="syncClienteNombre(this.value)">
+</div>
 <button class="checkout-btn js-checkout-btn" onclick="procesarVenta()" disabled>💳 💳 Cobrar / Generar Ticket</button>
 <div class="pay-label">Método de pago</div>
 <div class="pay-row">
@@ -1237,7 +1267,10 @@ input, select{font-family:inherit;}
     </div>
     <div class="field-group">
       <label class="field-label">Categoría</label>
-      <select class="field-select" id="prodCategoria"></select>
+      <div style="display:flex;gap:8px;">
+        <select class="field-select" id="prodCategoria" style="flex:1;"></select>
+        <button type="button" class="btn-secondary" style="flex:0 0 auto;padding:0 14px;" onclick="abrirNuevaCategoriaRapida()">+ Categoría</button>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="field-group">
@@ -1273,6 +1306,21 @@ input, select{font-family:inherit;}
       <button class="btn-danger" id="prodDeleteBtn" onclick="eliminarProducto()" style="display:none;flex:0.6;">🗑️ Eliminar</button>
       <button class="btn-secondary" onclick="cerrarModal('prodModal')">Cancelar</button>
       <button class="btn-primary" onclick="guardarProducto()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- NUEVA CATEGORÍA RÁPIDA MODAL -->
+<div class="modal-overlay" id="catRapidaModal">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="modal-title">Nueva Categoría</div>
+    <div class="field-group">
+      <label class="field-label">Nombre de la categoría</label>
+      <input class="field-input" type="text" id="catRapidaInput" placeholder="Ej: Tortas especiales" onkeydown="if(event.key==='Enter')guardarCategoriaRapida()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="cerrarModal('catRapidaModal')">Cancelar</button>
+      <button class="btn-primary" onclick="guardarCategoriaRapida()">Guardar</button>
     </div>
   </div>
 </div>
@@ -1322,6 +1370,14 @@ const STORE_KEY = 'mi_dulce_mia_v2';
 let sesion = null;
 let carrito = [];
 let metodoPago = 'efectivo';
+let clienteNombre = '';
+
+function syncClienteNombre(valor) {
+  clienteNombre = valor;
+  document.querySelectorAll('.js-cliente-nombre').forEach(el => {
+    if (el.value !== valor) el.value = valor;
+  });
+}
 let tabActual = 'inicio';
 let catFiltro = 'Todos';
 let favoritos = [];
@@ -2087,6 +2143,7 @@ function procesarVenta() {
         items,
         total,
         metodoPago,
+        cliente: clienteNombre.trim(),
         vendedor: sesion ? sesion.nombre : 'Desconocido'
       };
       d2.ventas.push(venta);
@@ -2097,6 +2154,7 @@ function procesarVenta() {
       renderProdGrid(d2);
       renderKPIs(d2);
       closeCartDrawer();
+      syncClienteNombre('');
       toast('🎉 Venta registrada');
       generarTicket(venta);
     },
@@ -2121,8 +2179,9 @@ async function generarTicket(venta) {
   const W = 380;
   const PAD = 20;
   const LOGO_SIZE = 90;
-  // Altura dinámica: logo (100) + cabecera texto (35) + datos venta (70) + items + total (50) + pie (55) + padding extra (20)
-  let height = 330 + venta.items.length * 24;
+  const tieneCliente = venta.cliente && venta.cliente.trim().length > 0;
+  // Altura dinámica: logo (100) + cabecera texto (35) + datos venta (70[+15 si hay cliente]) + items + total (50) + pie (55) + padding extra (20)
+  let height = 330 + venta.items.length * 24 + (tieneCliente ? 15 : 0);
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = height;
@@ -2162,6 +2221,9 @@ async function generarTicket(venta) {
 
   txt('N° ' + venta.id.slice(-8).toUpperCase(), PAD, cy, '700 11px Arial', '#000'); cy += 17;
   txt(fechaLegible(venta.fecha) + ' — ' + venta.hora, PAD, cy, '400 10px Arial', '#888'); cy += 15;
+  if (tieneCliente) {
+    txt('Cliente: ' + venta.cliente, PAD, cy, '400 10px Arial', '#888'); cy += 15;
+  }
   txt('Vendedor: ' + venta.vendedor, PAD, cy, '400 10px Arial', '#888'); cy += 15;
   const pagoTexto = venta.metodoPago === 'qr' ? 'Yape / Plin' : venta.metodoPago === 'tarjeta' ? 'Tarjeta' : 'Efectivo';
   txt('Pago: ' + pagoTexto, PAD, cy, '400 10px Arial', '#888'); cy += 18;
@@ -2178,8 +2240,8 @@ async function generarTicket(venta) {
   txt(S(venta.total), W-PAD, cy, '900 17px Arial', '#e8698a', 'right');
   cy += 36;
 
-  // Línea decorativa corazones
-  txt('· · · · · · · · · · · · · · · · · · · ·', W/2, cy, '400 10px Arial', '#f0a3b8', 'center'); cy += 18;
+  // Línea decorativa
+  txt('· · · · · · · · · · · · ·', W/2, cy, '400 10px Arial', '#f0a3b8', 'center'); cy += 18;
   txt('¡Gracias por tu compra!', W/2, cy, '700 12px Arial', '#3d1a2a', 'center'); cy += 16;
   txt('Mi Dulce Mia — Tortas & Cupcakes', W/2, cy, '400 10px Arial', '#a08090', 'center'); cy += 14;
   txt('¡Que lo disfrutes! 🎂', W/2, cy, '400 10px Arial', '#e8698a', 'center');
@@ -2268,11 +2330,17 @@ function abrirModalProducto(id) {
     limpiarFotoPreview();
   }
 
-  const catSel = document.getElementById('prodCategoria');
-  catSel.innerHTML = d.categorias.map(c => `<option value="${escapeHtml(c)}" ${p && p.categoria===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
+  llenarSelectCategorias(p ? p.categoria : null);
 
   document.getElementById('prodDeleteBtn').style.display = p ? 'inline-flex' : 'none';
   abrirModal('prodModal');
+}
+
+function llenarSelectCategorias(seleccionada) {
+  const d = initData();
+  const catSel = document.getElementById('prodCategoria');
+  const valorActual = seleccionada || catSel.value;
+  catSel.innerHTML = d.categorias.map(c => `<option value="${escapeHtml(c)}" ${valorActual===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
 }
 
 function guardarProducto() {
@@ -2396,6 +2464,7 @@ function renderHistorial() {
     ventas = ventas.filter(v =>
       v.id.toLowerCase().includes(q) ||
       v.vendedor.toLowerCase().includes(q) ||
+      (v.cliente && v.cliente.toLowerCase().includes(q)) ||
       v.items.some(it => it.nombre.toLowerCase().includes(q))
     );
   }
@@ -2414,7 +2483,7 @@ function renderHistorial() {
       <div class="sale-head">
         <div>
           <div class="sale-id">#${v.id.slice(-8).toUpperCase()}</div>
-          <div class="sale-meta">📅 ${fechaLegible(v.fecha)} · 🕐 ${v.hora} · 👤 ${escapeHtml(v.vendedor)}</div>
+          <div class="sale-meta">📅 ${fechaLegible(v.fecha)} · 🕐 ${v.hora} · 👤 ${escapeHtml(v.vendedor)}${v.cliente ? ' · 🧾 ' + escapeHtml(v.cliente) : ''}</div>
           <span class="pay-badge ${payClass[v.metodoPago]||'efectivo'}">${payLabel[v.metodoPago]||'💵 Efectivo'}</span>
         </div>
         <div class="sale-total">${S(v.total)}</div>
@@ -2540,6 +2609,31 @@ function agregarCategoria() {
   input.value = '';
   toast('✅ Categoría agregada');
   renderCategorias();
+}
+
+// Crear categoría rápida desde el modal de Producto
+function abrirNuevaCategoriaRapida() {
+  document.getElementById('catRapidaInput').value = '';
+  abrirModal('catRapidaModal');
+  setTimeout(() => document.getElementById('catRapidaInput').focus(), 100);
+}
+
+function guardarCategoriaRapida() {
+  const input = document.getElementById('catRapidaInput');
+  const nombre = input.value.trim();
+  if (!nombre) { toast('⚠️ Escribe un nombre de categoría'); return; }
+  const d = initData();
+  if (d.categorias.some(c => c.toLowerCase() === nombre.toLowerCase())) {
+    toast('⚠️ Esa categoría ya existe');
+    return;
+  }
+  d.categorias.push(nombre);
+  saveData(d);
+  cerrarModal('catRapidaModal');
+  toast('✅ Categoría agregada');
+  // Refrescar el select del modal de producto y seleccionar la nueva categoría
+  llenarSelectCategorias();
+  document.getElementById('prodCategoria').value = nombre;
 }
 
 function eliminarCategoria(cat) {
