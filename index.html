@@ -1329,6 +1329,22 @@ input, select{font-family:inherit;}
 <div class="modal-overlay" id="userModal">
   <div class="modal-box">
     <div class="modal-title" id="userModalTitle">Nuevo Usuario</div>
+
+    <!-- ── Foto de perfil ── -->
+    <div class="field-group">
+      <label class="field-label">Foto de perfil (opcional)</label>
+      <div class="foto-upload-wrap" id="userFotoUploadWrap" onclick="document.getElementById('userFotoInput').click()">
+        <div class="foto-placeholder" id="userFotoPlaceholder">
+          <span class="foto-ico">👤</span>
+          <span class="foto-txt">Toca para subir foto</span>
+          <span class="foto-hint">Cámara o galería · se comprime automáticamente</span>
+        </div>
+        <img id="userFotoPreviewImg" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px;">
+      </div>
+      <input type="file" id="userFotoInput" accept="image/*" style="display:none" onchange="onUserFotoSeleccionada(event)">
+      <button class="btn-foto-remove" id="userFotoRemoveBtn" style="display:none" onclick="quitarUserFoto(event)">✕ Quitar foto</button>
+    </div>
+
     <div class="field-group">
       <label class="field-label">Nombre completo</label>
       <input class="field-input" type="text" id="userNombre" placeholder="Ej: Angelo Perez">
@@ -1527,24 +1543,33 @@ function saveData(d) {
   const dataToSave = JSON.parse(JSON.stringify(d));
   const fotosOriginales = {};
   dataToSave.productos = dataToSave.productos.map(p => {
-    if (p.foto && p.foto !== '__tiene_foto__') fotosOriginales[p.id] = p.foto;
+    if (p.foto && p.foto !== '__tiene_foto__') fotosOriginales['prod_' + p.id] = p.foto;
     return { ...p, foto: p.foto ? '__tiene_foto__' : null };
+  });
+  dataToSave.usuarios = (dataToSave.usuarios || []).map(u => {
+    if (u.foto && u.foto !== '__tiene_foto__') fotosOriginales['user_' + u.id] = u.foto;
+    return { ...u, foto: u.foto ? '__tiene_foto__' : null };
   });
 
   window._db.collection("pos").doc("data").set(dataToSave)
     .catch(e => console.warn("Firebase save error:", e));
 
   // Guardar cada foto en su propio documento (comprimida)
-  Object.entries(fotosOriginales).forEach(async ([prodId, fotoBase64]) => {
+  Object.entries(fotosOriginales).forEach(async ([key, fotoBase64]) => {
     try {
       const fotoComprimida = await comprimirFotoParaFirebase(fotoBase64);
       if (fotoComprimida) {
-        await window._db.collection("fotos").doc(prodId).set({ foto: fotoComprimida });
+        await window._db.collection("fotos").doc(key).set({ foto: fotoComprimida });
         // Actualizar también el localStorage con la foto comprimida
         const local = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
         if (local) {
-          const idx = local.productos.findIndex(p => p.id === prodId);
-          if (idx >= 0) local.productos[idx].foto = fotoComprimida;
+          if (key.startsWith('prod_')) {
+            const idx = local.productos.findIndex(p => p.id === key.slice(5));
+            if (idx >= 0) local.productos[idx].foto = fotoComprimida;
+          } else if (key.startsWith('user_')) {
+            const idx = (local.usuarios||[]).findIndex(u => u.id === key.slice(5));
+            if (idx >= 0) local.usuarios[idx].foto = fotoComprimida;
+          }
           localStorage.setItem(STORE_KEY, JSON.stringify(local));
         }
       }
@@ -1554,18 +1579,25 @@ function saveData(d) {
   });
 }
 
-async function cargarFotosFirebase(productos) {
-  if (!window.firebaseReady || !window._db) return productos;
-  const conFoto = productos.filter(p => p.foto === '__tiene_foto__');
-  await Promise.all(conFoto.map(async (p) => {
-    try {
-      const snap = await window._db.collection("fotos").doc(p.id).get();
-      p.foto = snap.exists ? snap.data().foto : null;
-    } catch(e) {
-      p.foto = null;
-    }
-  }));
-  return productos;
+async function cargarFotosFirebase(productos, usuarios) {
+  if (!window.firebaseReady || !window._db) return { productos, usuarios };
+  const conFotoProd = (productos||[]).filter(p => p.foto === '__tiene_foto__');
+  const conFotoUser = (usuarios||[]).filter(u => u.foto === '__tiene_foto__');
+  await Promise.all([
+    ...conFotoProd.map(async (p) => {
+      try {
+        const snap = await window._db.collection("fotos").doc('prod_' + p.id).get();
+        p.foto = snap.exists ? snap.data().foto : null;
+      } catch(e) { p.foto = null; }
+    }),
+    ...conFotoUser.map(async (u) => {
+      try {
+        const snap = await window._db.collection("fotos").doc('user_' + u.id).get();
+        u.foto = snap.exists ? snap.data().foto : null;
+      } catch(e) { u.foto = null; }
+    })
+  ]);
+  return { productos, usuarios };
 }
 
 async function syncFromFirebase() {
@@ -1579,7 +1611,9 @@ async function syncFromFirebase() {
       return;
     }
     const remote = snap.data();
-    remote.productos = await cargarFotosFirebase(remote.productos || []);
+    const cargado = await cargarFotosFirebase(remote.productos || [], remote.usuarios || []);
+    remote.productos = cargado.productos;
+    remote.usuarios = cargado.usuarios;
     localStorage.setItem(STORE_KEY, JSON.stringify(remote));
     console.log("✅ Sincronizado desde Firebase (con fotos)");
     if (window.sesion) switchView(window.tabActual);
@@ -1593,7 +1627,9 @@ function startFirebaseListener() {
   window._db.collection("pos").doc("data").onSnapshot(async (snap) => {
     if (!snap.exists) return;
     const remote = snap.data();
-    remote.productos = await cargarFotosFirebase(remote.productos || []);
+    const cargado = await cargarFotosFirebase(remote.productos || [], remote.usuarios || []);
+    remote.productos = cargado.productos;
+    remote.usuarios = cargado.usuarios;
     localStorage.setItem(STORE_KEY, JSON.stringify(remote));
     console.log("🔄 Datos actualizados en tiempo real");
     if (window.sesion) switchView(window.tabActual);
@@ -1769,7 +1805,11 @@ function doLogin() {
 
     // Avatar / user info
     const roleIcoLogin = { dueno:'👑', admin:'⚙️', vendedor:'🎀' };
-    document.getElementById('hdrAvatar').textContent = u.nombre.trim().charAt(0).toUpperCase();
+    if (u.foto) {
+      document.getElementById('hdrAvatar').innerHTML = `<img src="${u.foto}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+    } else {
+      document.getElementById('hdrAvatar').textContent = u.nombre.trim().charAt(0).toUpperCase();
+    }
     document.getElementById('hdrUserName').textContent = u.nombre;
     document.getElementById('hdrUserRole').textContent = (roleIcoLogin[u.rol]||'👤') + ' ' + u.rol.charAt(0).toUpperCase()+u.rol.slice(1);
 
@@ -2381,36 +2421,41 @@ function guardarProducto() {
 }
 
 // ---- Foto helpers ----
+function comprimirImagenDesdeArchivo(file, maxSize, calidad) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) { reject('not_image'); return; }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        let w = img.width, h = img.height;
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+          else       { w = Math.round(w * maxSize / h); h = maxSize; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', calidad));
+      };
+      img.onerror = () => reject('img_error');
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject('read_error');
+    reader.readAsDataURL(file);
+  });
+}
+
 function onFotoSeleccionada(event) {
   const file = event.target.files[0];
   if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    toast('⚠️ El archivo no es una imagen válida');
-    event.target.value = '';
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const img = new Image();
-    img.onload = function() {
-      // Comprimir: máx 600px de ancho/alto, calidad 0.75 para que quepa en Firestore
-      const MAX = 600;
-      let w = img.width, h = img.height;
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-        else       { w = Math.round(w * MAX / h); h = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      const compressed = canvas.toDataURL('image/jpeg', 0.75);
-      mostrarFotoPreview(compressed);
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+  comprimirImagenDesdeArchivo(file, 600, 0.75)
+    .then(compressed => mostrarFotoPreview(compressed))
+    .catch(() => {
+      toast('⚠️ El archivo no es una imagen válida');
+      event.target.value = '';
+    });
 }
 
 function mostrarFotoPreview(src) {
@@ -2437,6 +2482,44 @@ function quitarFoto(e) {
   if (e) e.stopPropagation();
   document.getElementById('prodFotoInput').value = '';
   limpiarFotoPreview();
+}
+
+// ---- Foto de perfil de USUARIO (mismo patrón, IDs propios) ----
+function onUserFotoSeleccionada(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  comprimirImagenDesdeArchivo(file, 300, 0.8)
+    .then(compressed => mostrarUserFotoPreview(compressed))
+    .catch(() => {
+      toast('⚠️ El archivo no es una imagen válida');
+      event.target.value = '';
+    });
+}
+
+function mostrarUserFotoPreview(src) {
+  const img = document.getElementById('userFotoPreviewImg');
+  const placeholder = document.getElementById('userFotoPlaceholder');
+  const removeBtn = document.getElementById('userFotoRemoveBtn');
+  img.src = src;
+  img.style.display = 'block';
+  placeholder.style.display = 'none';
+  removeBtn.style.display = 'inline-block';
+}
+
+function limpiarUserFotoPreview() {
+  const img = document.getElementById('userFotoPreviewImg');
+  const placeholder = document.getElementById('userFotoPlaceholder');
+  const removeBtn = document.getElementById('userFotoRemoveBtn');
+  img.src = '';
+  img.style.display = 'none';
+  placeholder.style.display = 'flex';
+  removeBtn.style.display = 'none';
+}
+
+function quitarUserFoto(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('userFotoInput').value = '';
+  limpiarUserFotoPreview();
 }
 
 function eliminarProducto() {
@@ -2662,7 +2745,7 @@ function renderUsuarios() {
   const list = document.getElementById('userList');
   list.innerHTML = d.usuarios.map(u => `
     <div class="list-row" onclick="abrirModalUsuario('${u.id}')">
-      <div class="list-row-img">${roleIco[u.rol]||'👤'}</div>
+      <div class="list-row-img">${u.foto ? `<img src="${u.foto}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : (roleIco[u.rol]||'👤')}</div>
       <div class="list-row-info">
         <div class="list-row-name">${escapeHtml(u.nombre)}</div>
         <div class="list-row-meta">@${escapeHtml(u.user)} • ${escapeHtml(u.rol)}</div>
@@ -2679,7 +2762,33 @@ function abrirModalUsuario(id) {
   document.getElementById('userNombre').value = u ? u.nombre : '';
   document.getElementById('userUser').value = u ? u.user : '';
   document.getElementById('userPass').value = u ? u.pass : '';
-  document.getElementById('userRol').value = u ? u.rol : 'vendedor';
+
+  // Foto de perfil
+  document.getElementById('userFotoInput').value = '';
+  if (u && u.foto) {
+    mostrarUserFotoPreview(u.foto);
+  } else {
+    limpiarUserFotoPreview();
+  }
+
+  // Roles disponibles según quién está creando/editando:
+  // - Dueño solo puede asignar "Vendedor"
+  // - Admin puede asignar "Vendedor" y "Dueño" (no Admin)
+  // - Si se está editando un usuario cuyo rol actual no está en la lista permitida, se incluye para no perderlo
+  const rolesPermitidos = {
+    dueno: [{v:'vendedor', t:'Vendedor'}],
+    admin: [{v:'vendedor', t:'Vendedor'}, {v:'dueno', t:'Dueño'}]
+  };
+  const rolSesion = sesion ? sesion.rol : 'admin';
+  let opciones = rolesPermitidos[rolSesion] || rolesPermitidos['admin'];
+  if (u && !opciones.some(o => o.v === u.rol)) {
+    const etiquetas = { dueno:'Dueño', admin:'Administrador', vendedor:'Vendedor' };
+    opciones = [...opciones, { v: u.rol, t: etiquetas[u.rol] || u.rol }];
+  }
+  const rolSelect = document.getElementById('userRol');
+  rolSelect.innerHTML = opciones.map(o => `<option value="${o.v}">${o.t}</option>`).join('');
+  rolSelect.value = u ? u.rol : (opciones[0] ? opciones[0].v : 'vendedor');
+
   document.getElementById('userDeleteBtn').style.display = u ? 'inline-flex' : 'none';
   abrirModal('userModal');
 }
@@ -2689,9 +2798,26 @@ function guardarUsuario() {
   const user = document.getElementById('userUser').value.trim().toLowerCase();
   const pass = document.getElementById('userPass').value;
   const rol = document.getElementById('userRol').value;
+  const foto = document.getElementById('userFotoPreviewImg').src || '';
+  const fotoFinal = (foto && foto.startsWith('data:')) ? foto : null;
 
   if (!nombre || !user || !pass) {
     toast('⚠️ Completa todos los campos');
+    return;
+  }
+
+  // Validación de seguridad: confirmar que el rol elegido está permitido para quien crea/edita
+  const rolesPermitidos = {
+    dueno: ['vendedor'],
+    admin: ['vendedor', 'dueno']
+  };
+  const rolSesion = sesion ? sesion.rol : 'admin';
+  const permitido = rolesPermitidos[rolSesion] || rolesPermitidos['admin'];
+  const d0 = initData();
+  const usuarioExistente = editandoUserId ? d0.usuarios.find(x => x.id === editandoUserId) : null;
+  const rolNoCambia = usuarioExistente && usuarioExistente.rol === rol;
+  if (!permitido.includes(rol) && !rolNoCambia) {
+    toast('⚠️ No tienes permiso para asignar ese rol');
     return;
   }
 
@@ -2701,10 +2827,10 @@ function guardarUsuario() {
 
   if (editandoUserId) {
     const idx = d.usuarios.findIndex(x => x.id === editandoUserId);
-    if (idx >= 0) d.usuarios[idx] = { ...d.usuarios[idx], nombre, user, pass, rol };
+    if (idx >= 0) d.usuarios[idx] = { ...d.usuarios[idx], nombre, user, pass, rol, foto: fotoFinal };
     toast('✅ Usuario actualizado');
   } else {
-    d.usuarios.push({ id: uid(), nombre, user, pass, rol });
+    d.usuarios.push({ id: uid(), nombre, user, pass, rol, foto: fotoFinal });
     toast('✅ Usuario agregado');
   }
   saveData(d);
@@ -2732,7 +2858,12 @@ function eliminarUsuario() {
 function renderPerfil() {
   if (!sesion) return;
   const roleIco = { dueno:'👑', admin:'⚙️', vendedor:'🎀' };
-  document.getElementById('perfilAvatar').textContent = sesion.nombre.trim().charAt(0).toUpperCase();
+  const avatarEl = document.getElementById('perfilAvatar');
+  if (sesion.foto) {
+    avatarEl.innerHTML = `<img src="${sesion.foto}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  } else {
+    avatarEl.textContent = sesion.nombre.trim().charAt(0).toUpperCase();
+  }
   document.getElementById('perfilNombre').textContent = sesion.nombre;
   document.getElementById('perfilRol').textContent = (roleIco[sesion.rol]||'👤') + ' ' + sesion.rol.charAt(0).toUpperCase()+sesion.rol.slice(1);
   document.getElementById('perfilUser').textContent = '@' + sesion.user;
